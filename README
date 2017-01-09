@@ -1,0 +1,147 @@
+
+######################################
+#
+#	Web Search Engines 
+#	  CSCIGA - 2580
+#	    
+#	    Homework 3
+#	     Group 8
+#
+#       21, November, 2016
+#  @Authors: avm358, sm7029,nk2238
+#####################################
+
+
+------------------------------------------------------------
+	    Commands to run the search engine
+------------------------------------------------------------
+
+From the root directory
+
+1.Compile Code : 
+	javac -cp "lib/jsoup-1.10.1.jar:src" src/edu/nyu/cs/cs2580/*.java
+
+
+2.Generate PageRank ad Numviews
+	java -cp "lib/jsoup-1.10.1.jar:src" edu.nyu.cs.cs2580.SearchEngine --mode=mining --options=conf/engine.conf
+
+
+3.Index Corpus
+	java -cp "lib/jsoup-1.10.1.jar:src" edu.nyu.cs.cs2580.SearchEngine --mode=index --options=conf/engine.conf
+
+
+4.Run Server
+	java -cp "lib/jsoup-1.10.1.jar:src" -Xmx512m edu.nyu.cs.cs2580.SearchEngine --mode=serve --options=conf/engine.conf --port=25808
+
+
+
+------------------------------------------------------------
+	    	Running Pseudo Relavance
+------------------------------------------------------------		
+	1. Run Command : 	
+		curl "http://localhost:25808/prf?query=$q&ranker=favorite&numdocs=10&numterms=5"
+	***NOTE:
+	i.   Run above command at time of serving to get spearman generated for any query. 
+	ii.  The result is displayed to the client. 
+	iii. Default value for numdocs = 10 and numterms = 10.
+
+
+
+------------------------------------------------------------
+	    	Running Spearman
+------------------------------------------------------------
+
+	1. Run Command : 	
+		java -cp src edu.nyu.cs.cs2580.Spearman <PATH-TO-PAGERANKS> <PATH-TO-NUMVIEWS>
+	
+		For our code :
+				<PATH-TO-PAGERANKS> = data/index/PageRank.tsv 
+				<PATH-TO-NUMVIEWS> = data/index/numViews.tsv
+			
+	***NOTE:
+
+	i.   Needs to be run from root directory. 
+	ii.  If giving the path, give the exact path of both files with file name.
+	iii. Run the above after serving if you don't want to give path to page rank and num view, 
+	     load method from page rank and num views classes are used for getting data.
+
+
+------------------------------------------------------------
+	    	Running Bhattacharya
+------------------------------------------------------------
+
+***NOTE : We are assuming the set V is set of all frequently used terms in document from both queries, hence the result would be same for irrespective of the order of the queries.
+
+1. If given a prf.tsv file, execute the following command:  
+	java -cp src edu.nyu.cs.cs2580.Bhattacharyya prf.tsv qsim.tsv
+
+***NOTE:
+	It is assumed the above command will be run from the root directory. 
+	i.   It should have a "query:File-Name" structure.
+	ii.  Query shouldn't have  space but %20 for space.
+	iii. The file should be at the same directory level as Root Folder.
+	iv.  qsim file is at the same directory level as Root Folder.
+
+
+
+2. If given a folder location for finding all prf files, run the following command :
+	java -cp src edu.nyu.cs.cs2580.Bhattacharyya PrfPath qsim.tsv
+
+***NOTE:
+	It is assumed the above command will be run from the root directory. 
+	i.   There should be a list of queries file called queries.tsv, stored at Data.
+	ii.  Query shouldn't have  space but %20 for space.
+	iii. qsim file is at the same level as Root Directory. 
+
+
+3.Running Through Script
+
+	Script:
+	#!/bin/bash
+
+	rm -f prf*.tsv
+	i=0
+	while read q ; do
+		i=$((i + 1));
+		prfout=prf-$i.tsv;
+		curl "http://localhost:25808/prf?query=$q&ranker=favorite&numdocs=10&numterms=5" > $prfout;
+		echo $q:$prfout >> prf.tsv
+	done < queries.tsv
+	java -cp src edu.nyu.cs.cs2580.Bhattacharyya prf.tsv qsim.tsv
+
+------------------------------------------------------------
+	    		Indexing
+------------------------------------------------------------
+
+****NOTE ::: As per the instructions in the question, We have "only" used IndexerInvertedCompressed for this Homework. We assume the graders will run the code with just this indexer.
+
+
+--------------------------------------------------------------
+     		Implementation Description
+--------------------------------------------------------------
+
+1. Num Views 
+
+	- For NumViews, we compute the num views for each document in our corpus during the mining mode.
+	- We store the data in data/index/numViews.tsv
+	- The data is stored in the format: <document name> <numViews>.
+
+	- During indexing, this data is loaded and every document has its numViews stored in its object.
+	- This intrinsic property is then used during ranking with Ranker Comprehensive.
+	***NOTE : In case you’re providing you own NumViews file for spearman , please ensure it is tab delimited.
+
+2. Page Rank
+	- We have chosen a value of λ = 0.9 because since our corpus is not a representation of internet which can have many dangling links for a random surfer. We know that the all documents having outlines to each other will be present locally in  our corpus. Hence , a higher lambda value would more accurately represent the page ranks.(Having a higher component of transition matrix in ranks). 
+	- For Page Rank we have used the formula G^n*V , where G is the Google matrix 
+		where,
+		G = λ(Transition Matrix) + (1 - λ) * (Dangling Link Matrix)
+		n = no of iterations
+		V = (No of Docs)x1, Matrix with each value = 1
+	- To save n^3 computations instead of calculating G^n first we first calculate G*V to generate 
+	  a 1*(No Of Docs) Matrix . We then multiply this Matrix with G matrix each time for further 		  iterations.
+	- We have also optimised the matrix multiplication by storing matrix in terms of adjacency list 	  (as Vectors). By this way, we will only store the value of docs that has outlines from a 		  particular docs and not all the documents. As the matrix could be sparse, this will optimise 		  memory space used.  
+	- We store the data in data/index/PageRank.tsv
+	- The data is stored in the format: <document name> <PageRank Score>.
+	- During indexing, this data is loaded and every document has its PageRank stored in its object.
+	- This intrinsic property is then used during ranking with Ranker Comprehensive.
+	***NOTE : In case you’re providing you own PageRanks file for spearman , please ensure it is tab delimited.
